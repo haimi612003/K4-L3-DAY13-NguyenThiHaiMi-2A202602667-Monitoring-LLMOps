@@ -9,7 +9,7 @@
 - **Lớp:** K4-L3B
 - **Repository URL:** https://github.com/haimi612003/K4-L3-DAY13-NguyenThiHaiMi-2A202602667-Monitoring-LLMOps
 - **Commit SHA cuối:** ⏳ _điền sau khi push commit cuối_
-- **Challenge ID:** ⏳ _điền sau khi nhận `config/challenge.json` tại CP3_
+- **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1`
 - **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602667`
 
 ## 2. Evidence index
@@ -28,6 +28,7 @@
 | Prompt versions (đồng thời là trạng thái **trước** rollback) | [`evidence/09-prompt-versions.png`](evidence/09-prompt-versions.png) |
 | Prompt rollback (trạng thái **sau** rollback) | [`evidence/10b-after-rollback.png`](evidence/10b-after-rollback.png) |
 | Dashboard runtime | [`evidence/11-dashboard-overview.png`](evidence/11-dashboard-overview.png) |
+| Incident (toàn bộ output điều tra) | [`evidence/12-14-incident-investigation.txt`](evidence/12-14-incident-investigation.txt) |
 | Incident metric | `evidence/12-incident-metric.png` ⏳ |
 | Incident log | `evidence/13-incident-log.png` ⏳ |
 | Incident trace | `evidence/14-incident-trace.png` ⏳ |
@@ -84,16 +85,14 @@
 
 ## 7. Điều tra challenge
 
-⏳ **Chờ Lab Coach gửi `config/challenge.json` tại CP3.** Các trường dưới đây sẽ được điền bằng evidence của challenge chính thức.
-
-- **Challenge ID:**
-- **Khoảng thời gian điều tra:**
-- **Triệu chứng từ metrics:**
-- **Log line và correlation ID liên quan:**
-- **Trace ID và span gây ảnh hưởng:**
-- **Root cause:**
-- **Fix action:**
-- **Preventive measure:**
+- **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1` (cohort K4, seed 1312, 5 query feature `monitoring`, `latency_threshold_ms` 2000). Chạy `python scripts/inject_incident.py` rồi `python scripts/load_test.py --challenge --concurrency 5`. Toàn bộ output: [`evidence/12-14-incident-investigation.txt`](evidence/12-14-incident-investigation.txt).
+- **Khoảng thời gian điều tra:** 10:39:57–10:40:51 (UTC+7) ngày 30/09/2026 — từ lúc bật challenge đến lúc tắt và xác nhận hồi phục. Mốc so sánh: workload bình thường lúc 10:38:56.
+- **Triệu chứng từ metrics:** panel Latency: P95 tăng từ **160 ms → 2671 ms** (×16.7), vượt `latency_threshold_ms` 2000 của challenge và ngưỡng alert `HighLatencyP95` (2000 ms). Trong khi đó **TTFT P95 giữ nguyên 54–55 ms**, error rate 0%, retrieval success 100%, cost/request 0.0020 → 0.0023 USD (không đáng kể) → chỉ có latency xấu đi và phần chậm nằm **trước** bước generation.
+- **Log line và correlation ID liên quan:** cả 5 dòng `response_sent` của challenge có `latency_ms` 2663–2671, `ttft_ms` 51–54, `tool_success=true`. Dòng đại diện: `{"event": "response_sent", "correlation_id": "req-0032e323", "feature": "monitoring", "session_id": "k4-l3b-challenge-s02", "latency_ms": 2663, "ttft_ms": 51, "tool_success": true, "ts": "2026-09-30T03:40:00.024892Z"}`.
+- **Trace ID và span gây ảnh hưởng:** trace `2d2149eb9fe4b135c6e0d692a570531b` (metadata `correlation_id=req-0032e323`): `lab-agent-run` 2.664 s = **`retrieval` 2.506 s (94%)** + `llm-generation` 0.156 s. So với trace bình thường `d101572bdb7e42fb53a702aa91866635` (`req-4eea3501`): retrieval ~0 s, generation 0.152 s. Generation, TTFT và `prompt_version=1` giống hệt baseline; 4 trace còn lại của challenge đều có retrieval 2.508–2.516 s.
+- **Root cause:** bước retrieval (vector store/RAG) bị chậm thêm ~2.5 s mỗi lần gọi (sự cố `rag_slow` được challenge inject vào retrieval). Không phải do LLM (generation/TTFT không đổi), không phải do prompt (vẫn v1, không có thay đổi label trong khoảng này), không phải do tải (5 request, P50 cũng tăng như P95). Kiểm tra thêm khi sự cố còn bật: request `feature=qa` (`req-5c0be001`) cũng mất 2662 ms → retrieval chậm với **mọi** feature, `monitoring` bị ảnh hưởng vì là traffic của challenge.
+- **Fix action:** khôi phục retrieval bằng `python scripts/inject_incident.py --disable` (tương đương rollback/khởi động lại vector store). Xác nhận bằng chính 5 query challenge: latency còn **156.6–164.7 ms**, về đúng baseline.
+- **Preventive measure:** (1) alert `HighLatencyP95` > 2000 ms trong 5 phút (đã có trong [`config/alert_rules.yaml`](../config/alert_rules.yaml)) + runbook bước "TTFT không đổi → kiểm tra span retrieval"; (2) thêm SLI riêng cho span `retrieval` (ví dụ P95 > 500 ms) để cảnh báo đúng thành phần trước khi ảnh hưởng tổng latency; (3) đặt timeout ~1 s cho retrieval và fallback trả lời với context chung/cache thay vì để người dùng chờ; (4) chạy practice `rag_slow` trong CI/staging để kiểm tra alert và runbook còn hoạt động.
 
 ### Luyện tập trước CP3 (practice scenario, không phải challenge chính thức)
 
@@ -114,7 +113,7 @@ Practice `tool_fail`: log `request_failed` `req-e0000001` (`error_type=RuntimeEr
 - **Cách hiểu luồng Metrics → Logs → Traces:** metrics trả lời *có vấn đề gì và từ khi nào* (P95 tăng, TTFT không đổi); logs trả lời *request nào bị ảnh hưởng* (lọc `latency_ms` cao, lấy `correlation_id`); trace trả lời *bước nào gây ra* (so sánh duration/level của `retrieval` và `llm-generation`). `correlation_id` là khóa nối log với trace; thiếu nó thì chỉ đoán được.
 - **Vai trò của prompt version, token/cost, SLO hoặc rollback trong vận hành LLM:** prompt là một phần của "code" nhưng thay đổi được mà không deploy, nên mỗi trace phải ghi `prompt_name/label/version` để biết request dùng prompt nào. Ví dụ ở đây v2 làm `tokens_in` tăng 51 → 72 (+41%) — nếu cost/latency xấu đi thì rollback chỉ là chuyển label `production`, không cần sửa code. SLO + error budget cho biết khi nào được phép thử prompt mới và khi nào phải dừng.
 - **Điều quan trọng nhất đã học:** validator 100/100 không có nghĩa hệ thống quan sát được đúng — phải kiểm tra trực tiếp trên Langfuse mới phát hiện trace bị mất khi shutdown, và phải chạy thử incident mới thấy ngưỡng alert 3000 ms không bắt được `rag_slow`.
-- **Hạn chế hoặc phần chưa hoàn thành, nếu có:** challenge chính thức (CP3) chờ Lab Coach gửi file. Quality score vẫn là heuristic (FakeLLM trả câu trả lời cố định). Dashboard là dashboard local đọc file JSONL, alert chưa được gửi tự động lên Slack.
+- **Hạn chế hoặc phần chưa hoàn thành, nếu có:** Quality score vẫn là heuristic (FakeLLM trả câu trả lời cố định). Dashboard là dashboard local đọc file JSONL, alert chưa được gửi tự động lên Slack.
 
 ## 9. Checklist trước khi nộp
 

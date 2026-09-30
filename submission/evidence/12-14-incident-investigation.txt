@@ -1,0 +1,37 @@
+Challenge: day13-k4-l3b-monitoring-llmops-v1 | Cohort: K4 | seed 1312 | affected_feature: monitoring | latency_threshold_ms: 2000
+Timeline (UTC; local = UTC+7):
+  03:38:56  normal workload (python scripts/load_test.py --concurrency 5)
+  03:39:57  python scripts/inject_incident.py            -> incident enabled from config/challenge.json
+  03:39:57  python scripts/load_test.py --challenge --concurrency 5
+  03:40:48  scope check: 1 request feature=qa while incident still on
+  03:40:51  fix: python scripts/inject_incident.py --disable
+  03:40:51  verify: python scripts/load_test.py --challenge --concurrency 5
+
+1) METRICS (data/logs.jsonl, same aggregation as dashboard)
+  window                     n   p50    p95    p99    ttft_p95  errors  avg_cost_usd  quality
+  before   03:38:56-03:39:00 10  156ms  160ms  160ms  55ms      0       0.002042      0.88
+  incident 03:39:57-03:40:01  5  2671ms 2671ms 2671ms 54ms      0       0.002300      0.84
+  -> latency P95 x16.7 and above threshold 2000ms; TTFT, errors, cost unchanged -> slowness is BEFORE generation.
+
+2) LOGS (response_sent, latency_ms > 2000, ts >= 03:39:57Z)
+  2026-09-30T03:40:00.024892Z req-0032e323 monitoring latency_ms=2663 ttft_ms=51 tool_success=True
+  2026-09-30T03:40:00.031112Z req-939bf229 monitoring latency_ms=2669 ttft_ms=53 tool_success=True
+  2026-09-30T03:40:00.033479Z req-a5ee3532 monitoring latency_ms=2671 ttft_ms=53 tool_success=True
+  2026-09-30T03:40:00.034206Z req-1f353426 monitoring latency_ms=2671 ttft_ms=52 tool_success=True
+  2026-09-30T03:40:00.034579Z req-c128f3ae monitoring latency_ms=2671 ttft_ms=54 tool_success=True
+  Selected: correlation_id=req-0032e323 (session k4-l3b-challenge-s02, request_received 03:39:57.358890Z)
+
+3) TRACES (Langfuse, metadata correlation_id)
+  correlation_id  traceId                           root    retrieval  llm-generation  ttft    prompt
+  req-4eea3501    d101572bdb7e42fb53a702aa91866635  0.152s  0.000s     0.152s          0.051s  v1   (before)
+  req-0032e323    2d2149eb9fe4b135c6e0d692a570531b  2.664s  2.506s     0.156s          0.051s  v1   (incident)
+  req-939bf229    4358c37dd9da8080da1453236558a7ef  2.669s  2.508s     0.155s          0.054s  v1
+  req-a5ee3532    011bb541266ea6b43450eccb69c38578  2.672s  2.515s     0.156s          0.053s  v1
+  req-1f353426    9655ea1ea41a2042748f9a3431ea12a2  2.671s  2.516s     0.155s          0.053s  v1
+  req-c128f3ae    83f9e918835f57d4ce419e235d1cac20  2.671s  2.516s     0.155s          0.054s  v1
+  -> retrieval = 94% of request time; generation and prompt version identical to baseline.
+
+4) SCOPE + FIX VERIFICATION
+  scope check (incident on) feature=qa  req-5c0be001 latency_ms=2662 ttft=52  -> not feature-specific
+  after disable, same challenge queries: req-ca55da89 156.6ms, req-05a6f095 158.0ms, req-568f410e 161.9ms,
+                                         req-90e89770 164.2ms, req-aa73c548 164.7ms
