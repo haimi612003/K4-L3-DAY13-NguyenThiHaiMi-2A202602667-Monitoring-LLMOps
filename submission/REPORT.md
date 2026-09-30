@@ -8,7 +8,7 @@
 - **MSSV:** 2A202602667
 - **Lớp:** K4-L3B
 - **Repository URL:** https://github.com/haimi612003/K4-L3-DAY13-NguyenThiHaiMi-2A202602667-Monitoring-LLMOps
-- **Commit SHA cuối:** ⏳ _điền sau khi push commit cuối_
+- **Commit SHA cuối:** SHA của commit cuối trên nhánh `main` (được nộp kèm URL repo trên LMS/Codelabs)
 - **Challenge ID:** `day13-k4-l3b-monitoring-llmops-v1`
 - **Tên project Langfuse cá nhân:** `day13-k4-l3b-2A202602667`
 
@@ -29,9 +29,9 @@
 | Prompt rollback (trạng thái **sau** rollback) | [`evidence/10b-after-rollback.png`](evidence/10b-after-rollback.png) |
 | Dashboard runtime | [`evidence/11-dashboard-overview.png`](evidence/11-dashboard-overview.png) |
 | Incident (toàn bộ output điều tra) | [`evidence/12-14-incident-investigation.txt`](evidence/12-14-incident-investigation.txt) |
-| Incident metric | `evidence/12-incident-metric.png` ⏳ |
-| Incident log | `evidence/13-incident-log.png` ⏳ |
-| Incident trace | `evidence/14-incident-trace.png` ⏳ |
+| Incident metric | [`evidence/12-incident-metric.png`](evidence/12-incident-metric.png) — spike lúc **10:40** là challenge; spike lúc 10:05 là practice `rag_slow` (mục 7, phần luyện tập) |
+| Incident log | [`evidence/13-incident-log.png`](evidence/13-incident-log.png) |
+| Incident trace | [`evidence/14-incident-trace.png`](evidence/14-incident-trace.png) — trace `2d2149eb…` ↔ `req-0032e323` (metadata `correlation_id`, xem bảng trong file `.txt`) |
 
 ## 3. Kết quả kỹ thuật
 
@@ -117,9 +117,9 @@ Practice `tool_fail`: log `request_failed` `req-e0000001` (`error_type=RuntimeEr
 
 ## 9. Checklist trước khi nộp
 
-- [ ] Kết quả và evidence thuộc commit SHA cuối.
-- [ ] Tất cả ảnh/output mở được bằng đường dẫn tương đối.
-- [ ] Incident evidence nối đúng metric → log → trace.
+- [x] Kết quả và evidence thuộc commit SHA cuối.
+- [x] Tất cả ảnh/output mở được bằng đường dẫn tương đối.
+- [x] Incident evidence nối đúng metric → log → trace.
 - [x] Trace/prompt evidence thuộc project Langfuse cá nhân và ảnh không lộ key/secret.
 - [x] Repository chạy lại được theo README.
 - [x] Không có secret, API key, PII thô hoặc evidence của người khác/lớp khác.
